@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<!-- This page may only talk to GitHub's API and load GitHub avatars. Nothing else. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.github.com; img-src https://avatars.githubusercontent.com data:; form-action 'none'; base-uri 'none'">
+<title>Git Tracker</title>
+<style>
+  :root {
+    --bg: #f5f7fa; --panel: #ffffff; --text: #1b1f24; --muted: #5b6573; --line: #e1e5ea;
+    --accent: #2f6fde; --accent-text: #ffffff;
+    --shared: #1a7f4b; --shared-bg: #e3f4ea;
+    --pending: #94620a; --pending-bg: #fdf1d4;
+    --none: #56606b; --none-bg: #edf0f3;
+    --danger: #c0392b;
+    --shadow: 0 1px 2px rgba(20,30,50,.05), 0 2px 8px rgba(20,30,50,.04);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216; --panel: #171b21; --text: #e6e9ed; --muted: #98a1ad; --line: #2a3039;
+      --accent: #5b8ff0; --accent-text: #0f1216;
+      --shared: #4cc98a; --shared-bg: #15301f;
+      --pending: #e3b341; --pending-bg: #342a10;
+      --none: #a1a9b4; --none-bg: #232931;
+      --danger: #ef6b5b;
+      --shadow: none;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: inherit; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+  [hidden] { display: none !important; }
+
+  header.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  header.top h1 { font-size: 20px; margin: 0; flex: 1; letter-spacing: -.01em; }
+  .who { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; text-decoration: none; }
+  .who img { width: 28px; height: 28px; border-radius: 50%; }
+  .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 14px;
+    cursor: pointer; box-shadow: var(--shadow); text-decoration: none; display: inline-block; }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  .btn.link { border: none; background: none; box-shadow: none; color: var(--muted); padding: 7px 6px; text-decoration: underline; }
+  .btn:disabled { opacity: .6; cursor: default; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+
+  /* setup */
+  .setup { max-width: 580px; margin: 48px auto; padding: 28px; }
+  .setup h2 { margin: 0 0 6px; font-size: 22px; }
+  .setup p { color: var(--muted); margin: 0 0 18px; }
+  .setup ol { padding-left: 20px; margin: 0 0 20px; }
+  .setup li { margin-bottom: 8px; }
+  .setup input[type=password] { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); margin-bottom: 12px; font-family: ui-monospace, Consolas, monospace; }
+  .setup .row-inline { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .setup label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
+  .msg { margin-top: 12px; font-size: 14px; }
+  .msg.err { color: var(--danger); }
+  .note { font-size: 13px; color: var(--muted); margin-top: 18px; }
+
+  /* tiles */
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tile { padding: 14px 16px; cursor: pointer; text-align: left; }
+  .tile.active { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .tile .n { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile .l { color: var(--muted); font-size: 13px; }
+  .tile.shared .n { color: var(--shared); }
+  .tile.pending .n { color: var(--pending); }
+
+  /* controls */
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .controls input[type=search] { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--panel); }
+  .controls select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  .controls label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+
+  /* list */
+  .list { overflow: hidden; }
+  .row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 16px; align-items: center;
+    padding: 14px 16px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: none; }
+  .row > div { min-width: 0; }
+  .name { font-weight: 600; text-decoration: none; word-break: break-word; }
+  .name:hover { text-decoration: underline; }
+  .desc { color: var(--muted); font-size: 13px; margin-top: 2px; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .tag { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .status { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; margin-bottom: 6px; }
+  .status.shared { color: var(--shared); background: var(--shared-bg); }
+  .status.pending { color: var(--pending); background: var(--pending-bg); }
+  .status.none { color: var(--none); background: var(--none-bg); }
+  .people { display: flex; flex-wrap: wrap; gap: 6px; }
+  .person { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; text-decoration: none;
+    padding: 2px 8px 2px 2px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+  .person img { width: 20px; height: 20px; border-radius: 50%; }
+  .person.invite { border-style: dashed; padding-left: 8px; }
+  .person.invite img { margin-left: -6px; }
+  .person .role { color: var(--muted); }
+  .err-line { color: var(--danger); font-size: 12px; margin-top: 4px; }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+
+  /* history */
+  details.history { margin-top: 22px; padding: 4px 16px; }
+  details.history summary { cursor: pointer; padding: 10px 0; font-weight: 600; }
+  .hist-item { display: flex; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .hist-item time { color: var(--muted); white-space: nowrap; font-size: 13px; min-width: 140px; }
+
+  footer { margin-top: 28px; color: var(--muted); font-size: 12px; text-align: center; }
+  .loading { position: fixed; right: 16px; bottom: 16px; padding: 10px 16px; font-size: 14px; }
+
+  @media (max-width: 720px) {
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .hist-item { flex-direction: column; gap: 2px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Connect screen -->
+  <section id="setup" class="panel setup" hidden>
+    <h2>Connect your GitHub</h2>
+    <p>Git Tracker needs a GitHub access key (a "personal access token") to see who has access to your repositories. The key stays in this browser and is only ever sent to GitHub.</p>
+    <ol>
+      <li><a href="https://github.com/settings/tokens/new?scopes=repo&amp;description=Git%20Tracker" target="_blank" rel="noopener">Open this GitHub page</a> (sign in if asked).</li>
+      <li>"repo" is already ticked. Pick an expiration date you're comfortable with.</li>
+      <li>Scroll down, click <b>Generate token</b>, and copy the token (it starts with <code>ghp_</code>).</li>
+      <li>Paste it below.</li>
+    </ol>
+    <form id="tokenForm">
+      <input id="tokenInput" type="password" placeholder="ghp_…" autocomplete="off" spellcheck="false" aria-label="GitHub token">
+      <div class="row-inline">
+        <button class="btn primary" type="submit" id="tokenBtn">Connect</button>
+        <label><input type="checkbox" id="remember" checked> Remember on this device</label>
+      </div>
+    </form>
+    <div id="setupMsg" class="msg" role="status"></div>
+    <p class="note">Without your key, this page shows nothing. Nobody who opens it can see your repositories. It only reads from GitHub and never changes anything.</p>
+  </section>
+
+  <!-- Main screen -->
+  <section id="main" hidden>
+    <header class="top">
+      <h1>Git Tracker</h1>
+      <a class="who" id="who" target="_blank" rel="noopener"></a>
+      <button class="btn primary" id="refreshBtn" type="button">Refresh</button>
+      <button class="btn link" id="disconnectBtn" type="button">Disconnect</button>
+    </header>
+
+    <div class="tiles">
+      <button class="panel tile" type="button" data-filter="all"><div class="n" id="tAll">0</div><div class="l">Repositories</div></button>
+      <button class="panel tile shared" type="button" data-filter="shared"><div class="n" id="tShared">0</div><div class="l">Shared with someone</div></button>
+      <button class="panel tile pending" type="button" data-filter="pending"><div class="n" id="tPending">0</div><div class="l">Invite pending</div></button>
+      <button class="panel tile none" type="button" data-filter="none"><div class="n" id="tNone">0</div><div class="l">Not shared (only you)</div></button>
+    </div>
+
+    <div class="controls">
+      <input type="search" id="search" placeholder="Search repositories or people…" aria-label="Search">
+      <select id="visibility" aria-label="Visibility">
+        <option value="any">Public &amp; private</option>
+        <option value="private">Private only</option>
+        <option value="public">Public only</option>
+      </select>
+      <select id="sort" aria-label="Sort">
+        <option value="name">Sort: name</option>
+        <option value="pushed">Sort: recently updated</option>
+        <option value="people">Sort: most people</option>
+      </select>
+      <label><input type="checkbox" id="showArchived" checked> Archived</label>
+      <label><input type="checkbox" id="showForks" checked> Forks</label>
+    </div>
+    <div class="meta" id="meta"></div>
+
+    <div class="panel list" id="list"></div>
+
+    <details class="panel history" id="historyBox">
+      <summary>Sharing changes over time</summary>
+      <div id="history"></div>
+    </details>
+
+    <footer>Your key and this data are stored only in this browser. This page talks to api.github.com and nothing else.</footer>
+  </section>
+
+  <div id="loading" class="panel loading" hidden role="status">Checking GitHub…</div>
+</div>
+
+<!-- Core: talks to GitHub and compares scans. No page access here. -->
+<script id="core">
+const GT = (() => {
+  const API = 'https://api.github.com';
+
+  async function ghFetch(url, token) {
+    const res = await fetch(url.startsWith('http') ? url : API + url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      let message = res.statusText;
+      try { message = (await res.json()).message || message; } catch {}
+      const err = new Error(res.status === 401
+        ? 'GitHub rejected the key. It may be wrong, expired, or revoked.'
+        : `GitHub said: ${message} (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    return res;
+  }
+
+  function nextLink(header) {
+    if (!header) return null;
+    const part = header.split(',').find((p) => p.includes('rel="next"'));
+    const m = part && part.match(/<([^>]+)>/);
+    return m ? m[1] : null;
+  }
+
+  async function ghAll(url, token) {
+    const out = [];
+    let next = url;
+    while (next) {
+      const res = await ghFetch(next, token);
+      out.push(...(await res.json()));
+      next = nextLink(res.headers.get('link'));
+    }
+    return out;
+  }
+
+  async function mapLimit(items, limit, fn) {
+    const results = new Array(items.length);
+    let i = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (i < items.length) { const idx = i++; results[idx] = await fn(items[idx]); }
+    });
+    await Promise.all(workers);
+    return results;
+  }
+
+  // Checks the key. Returns the GitHub user, or throws a plain-English error.
+  async function checkToken(token) {
+    const res = await ghFetch('/user', token);
+    const user = await res.json();
+    const scopes = res.headers.get('x-oauth-scopes');
+    if (scopes !== null && !scopes.split(',').map((s) => s.trim()).includes('repo')) {
+      throw new Error('That key works, but it is missing the "repo" permission, so private repositories and their collaborators can\'t be read. Make a new key with "repo" ticked.');
+    }
+    return user;
+  }
+
+  async function scan(token, onProgress = () => {}) {
+    const me = await (await ghFetch('/user', token)).json();
+    const repos = await ghAll('/user/repos?affiliation=owner&per_page=100&sort=full_name', token);
+    let done = 0;
+    onProgress(0, repos.length);
+
+    const results = await mapLimit(repos, 6, async (r) => {
+      const base = `/repos/${r.full_name}`;
+      const owner = r.owner.login.toLowerCase();
+      let collaborators = [];
+      let invites = [];
+      let error = null;
+      try {
+        const list = await ghAll(`${base}/collaborators?affiliation=direct&per_page=100`, token);
+        collaborators = list
+          .filter((c) => c.login.toLowerCase() !== owner)
+          .map((c) => ({ login: c.login, avatar: c.avatar_url, url: c.html_url, role: c.role_name || '' }));
+      } catch (e) { error = e.message; }
+      try {
+        const list = await ghAll(`${base}/invitations?per_page=100`, token);
+        invites = list.map((i) => ({
+          login: i.invitee ? i.invitee.login : (i.email || 'unknown'),
+          avatar: i.invitee ? i.invitee.avatar_url : '',
+          url: i.invitee ? i.invitee.html_url : '',
+          role: i.permissions || '',
+          createdAt: i.created_at,
+        }));
+      } catch (e) { if (!error) error = e.message; }
+      onProgress(++done, repos.length);
+
+      return {
+        name: r.name,
+        fullName: r.full_name,
+        url: r.html_url,
+        accessUrl: `${r.html_url}/settings/access`,
+        description: r.description || '',
+        private: r.private,
+        fork: r.fork,
+        archived: r.archived,
+        pushedAt: r.pushed_at,
+        status: collaborators.length ? 'shared' : invites.length ? 'pending' : 'none',
+        collaborators,
+        invites,
+        error,
+      };
+    });
+
+    return {
+      scannedAt: new Date().toISOString(),
+      user: { login: me.login, name: me.name || '', avatar: me.avatar_url, url: me.html_url },
+      repos: results,
+    };
+  }
+
+  // Compares two scans and describes what changed, in plain words.
+  function diffScans(prev, next) {
+    if (!prev || !prev.repos || !prev.user || prev.user.login !== next.user.login) return [];
+    const when = next.scannedAt;
+    const events = [];
+    const before = new Map(prev.repos.map((r) => [r.fullName, r]));
+    const after = new Map(next.repos.map((r) => [r.fullName, r]));
+    const people = (r) => new Set(r.collaborators.map((c) => c.login));
+    const pending = (r) => new Set(r.invites.map((c) => c.login));
+
+    for (const [name, r] of after) {
+      const old = before.get(name);
+      if (!old) { events.push({ when, repo: name, text: 'New repository' }); continue; }
+      const pa = people(old), pb = people(r);
+      for (const p of pb) if (!pa.has(p)) events.push({ when, repo: name, text: `Now shared with ${p}` });
+      for (const p of pa) if (!pb.has(p)) events.push({ when, repo: name, text: `No longer shared with ${p}` });
+      const ia = pending(old), ib = pending(r);
+      for (const p of ib) if (!ia.has(p) && !pb.has(p)) events.push({ when, repo: name, text: `Invite sent to ${p}` });
+      if (old.private !== r.private) events.push({ when, repo: name, text: r.private ? 'Made private' : 'Made public' });
+    }
+    for (const name of before.keys()) {
+      if (!after.has(name)) events.push({ when, repo: name, text: 'Repository removed or transferred' });
+    }
+    return events;
+  }
+
+  return { checkToken, scan, diffScans };
+})();
+if (typeof module !== 'undefined') module.exports = GT;
+</script>
+
+<!-- Page: storage and display -->
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const KEYS = { token: 'gt.token', cache: 'gt.cache', history: 'gt.history' };
+  const state = { data: null, history: [], filter: 'all', busy: false };
+
+  // Storage that never breaks the page if the browser blocks it.
+  const store = {
+    get(area, key) { try { return window[area].getItem(key); } catch { return null; } },
+    set(area, key, val) { try { window[area].setItem(key, val); return true; } catch { return false; } },
+    del(key) { for (const a of ['localStorage', 'sessionStorage']) { try { window[a].removeItem(key); } catch {} } },
+    json(key, fallback) { try { return JSON.parse(store.get('localStorage', key)) ?? fallback; } catch { return fallback; } },
+  };
+  const getToken = () => store.get('sessionStorage', KEYS.token) || store.get('localStorage', KEYS.token);
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const safeUrl = (u) => /^https:\/\//.test(u || '') ? u : '#';
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const ago = (iso) => {
+    if (!iso) return 'never';
+    const s = (Date.now() - new Date(iso)) / 1000;
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+    return `${Math.floor(s / 86400)} days ago`;
+  };
+
+  function show(screen) {
+    $('setup').hidden = screen !== 'setup';
+    $('main').hidden = screen !== 'main';
+  }
+  function busy(text) {
+    state.busy = Boolean(text);
+    $('loading').hidden = !text;
+    if (text) $('loading').textContent = text;
+    $('refreshBtn').disabled = state.busy;
+  }
+  function setupError(text) {
+    $('setupMsg').className = 'msg err';
+    $('setupMsg').textContent = text;
+  }
+
+  async function refresh() {
+    const token = getToken();
+    if (!token) return show('setup');
+    if (state.busy) return;
+    busy('Checking GitHub…');
+    try {
+      const data = await GT.scan(token, (done, total) => busy(`Checking repositories… ${done} of ${total}`));
+      const events = GT.diffScans(state.data, data);
+      if (events.length) {
+        state.history = [...events, ...state.history].slice(0, 300);
+        store.set('localStorage', KEYS.history, JSON.stringify(state.history));
+      }
+      state.data = data;
+      store.set('localStorage', KEYS.cache, JSON.stringify(data));
+      render();
+    } catch (e) {
+      if (e.status === 401) { store.del(KEYS.token); show('setup'); setupError(e.message); }
+      else if (e instanceof TypeError) alert('Couldn\'t reach GitHub. Check your internet connection and try again.');
+      else alert(e.message);
+    } finally { busy(''); }
+  }
+
+  function person(p, invite) {
+    const img = p.avatar ? `<img src="${esc(safeUrl(p.avatar))}" alt="">` : '';
+    const role = invite ? 'invited' : p.role;
+    const title = invite ? `Invite sent ${fmtDate(p.createdAt)}, not accepted yet` : `Access: ${p.role}`;
+    return `<a class="person${invite ? ' invite' : ''}" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener" title="${esc(title)}">${img}${esc(p.login)}${role ? ` <span class="role">· ${esc(role)}</span>` : ''}</a>`;
+  }
+
+  const statusLabel = { shared: 'Shared', pending: 'Invite pending', none: 'Not shared' };
+
+  function render() {
+    const d = state.data;
+    if (!d) return;
+    show('main');
+
+    $('who').href = safeUrl(d.user.url);
+    $('who').innerHTML = `<img src="${esc(safeUrl(d.user.avatar))}" alt=""><span>${esc(d.user.login)}</span>`;
+
+    const repos = d.repos;
+    const count = (s) => repos.filter((r) => r.status === s).length;
+    $('tAll').textContent = repos.length;
+    $('tShared').textContent = count('shared');
+    $('tPending').textContent = count('pending');
+    $('tNone').textContent = count('none');
+    document.querySelectorAll('.tile').forEach((t) => t.classList.toggle('active', t.dataset.filter === state.filter));
+
+    const q = $('search').value.trim().toLowerCase();
+    const vis = $('visibility').value;
+    const showArchived = $('showArchived').checked;
+    const showForks = $('showForks').checked;
+    const sort = $('sort').value;
+
+    const rows = repos.filter((r) =>
+      (state.filter === 'all' || r.status === state.filter) &&
+      (vis === 'any' || (vis === 'private') === r.private) &&
+      (showArchived || !r.archived) &&
+      (showForks || !r.fork) &&
+      (!q || r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q) ||
+        [...r.collaborators, ...r.invites].some((p) => p.login.toLowerCase().includes(q))));
+
+    const peopleCount = (r) => r.collaborators.length + r.invites.length;
+    rows.sort(sort === 'pushed' ? (a, b) => (b.pushedAt || '').localeCompare(a.pushedAt || '')
+      : sort === 'people' ? (a, b) => peopleCount(b) - peopleCount(a) || a.name.localeCompare(b.name)
+      : (a, b) => a.name.localeCompare(b.name));
+
+    $('meta').textContent = `Showing ${rows.length} of ${repos.length} · Last checked ${ago(d.scannedAt)} (${fmtDate(d.scannedAt)})`;
+
+    $('list').innerHTML = rows.length ? rows.map((r) => `
+      <div class="row">
+        <div>
+          <a class="name" href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener">${esc(r.name)}</a>
+          ${r.description ? `<div class="desc">${esc(r.description)}</div>` : ''}
+          <div class="tags">
+            <span class="tag">${r.private ? 'Private' : 'Public, anyone can view'}</span>
+            ${r.fork ? '<span class="tag">Fork</span>' : ''}
+            ${r.archived ? '<span class="tag">Archived</span>' : ''}
+          </div>
+        </div>
+        <div>
+          <span class="status ${r.status}">${statusLabel[r.status]}</span>
+          ${peopleCount(r)
+            ? `<div class="people">${r.collaborators.map((p) => person(p, false)).join('')}${r.invites.map((p) => person(p, true)).join('')}</div>`
+            : '<div class="desc">Only you have access</div>'}
+          ${r.error ? `<div class="err-line">Couldn't fully check this one: ${esc(r.error)}</div>` : ''}
+        </div>
+        <div><a class="btn" href="${esc(safeUrl(r.accessUrl))}" target="_blank" rel="noopener">Manage access</a></div>
+      </div>`).join('')
+      : '<div class="empty">No repositories match.</div>';
+
+    $('history').innerHTML = state.history.length
+      ? state.history.map((e) => `<div class="hist-item"><time>${esc(fmtDate(e.when))}</time><div><b>${esc(e.repo.split('/').pop())}</b>: ${esc(e.text)}</div></div>`).join('')
+      : '<div class="hist-item">No changes recorded yet. Each time you refresh, anyone added or removed shows up here.</div>';
+  }
+
+  // events
+  document.querySelectorAll('.tile').forEach((t) => t.addEventListener('click', () => { state.filter = t.dataset.filter; render(); }));
+  ['search', 'visibility', 'sort', 'showArchived', 'showForks'].forEach((id) => $(id).addEventListener('input', render));
+  $('refreshBtn').addEventListener('click', refresh);
+
+  $('disconnectBtn').addEventListener('click', () => {
+    if (!confirm('Disconnect GitHub? This removes your key and the saved history from this browser. To cancel the key completely, also delete it on GitHub.')) return;
+    Object.values(KEYS).forEach(store.del);
+    state.data = null; state.history = [];
+    $('setupMsg').textContent = '';
+    show('setup');
+  });
+
+  $('tokenForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const token = $('tokenInput').value.trim();
+    if (!token) return setupError('Paste your key first.');
+    $('setupMsg').className = 'msg'; $('setupMsg').textContent = 'Checking key…';
+    $('tokenBtn').disabled = true;
+    try {
+      const user = await GT.checkToken(token);
+      if (state.data && state.data.user.login !== user.login) {
+        state.data = null; state.history = [];
+        store.del(KEYS.cache); store.del(KEYS.history);
+      }
+      store.del(KEYS.token);
+      store.set($('remember').checked ? 'localStorage' : 'sessionStorage', KEYS.token, token);
+      $('tokenInput').value = '';
+      $('setupMsg').textContent = '';
+      await refresh();
+    } catch (e) {
+      setupError(e instanceof TypeError ? 'Couldn\'t reach GitHub. Check your internet connection and try again.' : e.message);
+    } finally { $('tokenBtn').disabled = false; }
+  });
+
+  // start: show the last check right away, then fetch fresh data
+  state.data = store.json(KEYS.cache, null);
+  state.history = store.json(KEYS.history, []);
+  if (!getToken()) show('setup');
+  else { if (state.data) render(); refresh(); }
+})();
+</script>
+</body>
+</html>

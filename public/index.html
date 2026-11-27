@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Git Tracker</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #5d6673; --line: #e3e6ea;
+    --accent: #2f6fde; --accent-text: #ffffff;
+    --shared: #1a7f4b; --shared-bg: #e5f5ec;
+    --pending: #9a6700; --pending-bg: #fff4d6;
+    --none: #57606a; --none-bg: #eef0f2;
+    --danger: #c0392b;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216; --panel: #171b21; --text: #e6e9ed; --muted: #98a1ad; --line: #2a3039;
+      --accent: #5b8ff0; --accent-text: #0f1216;
+      --shared: #4cc98a; --shared-bg: #15301f;
+      --pending: #e3b341; --pending-bg: #342a10;
+      --none: #a1a9b4; --none-bg: #232931;
+      --danger: #ef6b5b;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: inherit; }
+  button, input, select { font: inherit; color: inherit; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+  .hidden { display: none !important; }
+
+  header.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  header.top h1 { font-size: 20px; margin: 0; flex: 1; letter-spacing: -.01em; }
+  .who { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+  .who img { width: 28px; height: 28px; border-radius: 50%; }
+  .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 14px;
+    cursor: pointer; box-shadow: var(--shadow); }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  .btn.link { border: none; background: none; box-shadow: none; color: var(--muted); padding: 7px 6px; text-decoration: underline; }
+  .btn:disabled { opacity: .6; cursor: default; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+
+  /* setup */
+  .setup { max-width: 560px; margin: 48px auto; padding: 28px; }
+  .setup h2 { margin: 0 0 6px; font-size: 22px; }
+  .setup p { color: var(--muted); margin: 0 0 18px; }
+  .setup ol { padding-left: 20px; margin: 0 0 20px; }
+  .setup li { margin-bottom: 8px; }
+  .setup input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); margin-bottom: 12px; font-family: ui-monospace, Consolas, monospace; }
+  .msg { margin-top: 12px; font-size: 14px; }
+  .msg.err { color: var(--danger); }
+  .note { font-size: 13px; color: var(--muted); margin-top: 18px; }
+
+  /* tiles */
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tile { padding: 14px 16px; cursor: pointer; text-align: left; border: 1px solid var(--line); }
+  .tile.active { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .tile .n { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile .l { color: var(--muted); font-size: 13px; }
+  .tile.shared .n { color: var(--shared); }
+  .tile.pending .n { color: var(--pending); }
+
+  /* controls */
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .controls input[type=search] { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--panel); }
+  .controls select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  .controls label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+
+  /* list */
+  .list { overflow: hidden; }
+  .row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 16px; align-items: center;
+    padding: 14px 16px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: none; }
+  .name { font-weight: 600; text-decoration: none; word-break: break-word; }
+  .name:hover { text-decoration: underline; }
+  .desc { color: var(--muted); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .tag { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .status { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; margin-bottom: 6px; }
+  .status.shared { color: var(--shared); background: var(--shared-bg); }
+  .status.pending { color: var(--pending); background: var(--pending-bg); }
+  .status.none { color: var(--none); background: var(--none-bg); }
+  .people { display: flex; flex-wrap: wrap; gap: 6px; }
+  .person { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; text-decoration: none;
+    padding: 2px 8px 2px 2px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+  .person img { width: 20px; height: 20px; border-radius: 50%; }
+  .person.invite { border-style: dashed; }
+  .person .role { color: var(--muted); }
+  .err-line { color: var(--danger); font-size: 12px; }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+
+  /* history */
+  details.history { margin-top: 22px; padding: 4px 16px; }
+  details.history summary { cursor: pointer; padding: 10px 0; font-weight: 600; }
+  .hist-item { display: flex; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .hist-item time { color: var(--muted); white-space: nowrap; font-size: 13px; min-width: 130px; }
+
+  .loading { position: fixed; inset: auto 16px 16px auto; padding: 10px 16px; font-size: 14px; }
+
+  @media (max-width: 720px) {
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .hist-item { flex-direction: column; gap: 2px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Setup screen -->
+  <section id="setup" class="panel setup hidden">
+    <h2>Connect your GitHub</h2>
+    <p>Git Tracker needs a GitHub access key (a "personal access token") so it can see who has access to your repositories. It's saved only on this computer.</p>
+    <ol>
+      <li><a href="https://github.com/settings/tokens/new?scopes=repo&description=Git%20Tracker" target="_blank" rel="noopener">Open this GitHub page</a> (sign in if asked).</li>
+      <li>"repo" is already ticked. Pick an expiration date you're comfortable with.</li>
+      <li>Scroll down, click <b>Generate token</b>, and copy the token (it starts with <code>ghp_</code>).</li>
+      <li>Paste it below.</li>
+    </ol>
+    <form id="tokenForm">
+      <input id="tokenInput" type="password" placeholder="ghp_…" autocomplete="off" spellcheck="false">
+      <button class="btn primary" type="submit" id="tokenBtn">Connect</button>
+    </form>
+    <div id="setupMsg" class="msg"></div>
+    <p class="note">This app only runs on your PC at 127.0.0.1, so nobody else can open it. It only reads from GitHub and never changes anything.</p>
+  </section>
+
+  <!-- Main screen -->
+  <section id="main" class="hidden">
+    <header class="top">
+      <h1>Git Tracker</h1>
+      <a class="who" id="who" target="_blank" rel="noopener"></a>
+      <button class="btn primary" id="refreshBtn">Refresh</button>
+      <button class="btn link" id="disconnectBtn">Disconnect</button>
+    </header>
+
+    <div class="tiles">
+      <button class="panel tile" data-filter="all"><div class="n" id="tAll">0</div><div class="l">Repositories</div></button>
+      <button class="panel tile shared" data-filter="shared"><div class="n" id="tShared">0</div><div class="l">Shared with someone</div></button>
+      <button class="panel tile pending" data-filter="pending"><div class="n" id="tPending">0</div><div class="l">Invite pending</div></button>
+      <button class="panel tile none" data-filter="none"><div class="n" id="tNone">0</div><div class="l">Not shared (only you)</div></button>
+    </div>
+
+    <div class="controls">
+      <input type="search" id="search" placeholder="Search repositories or people…">
+      <select id="visibility" aria-label="Visibility">
+        <option value="any">Public &amp; private</option>
+        <option value="private">Private only</option>
+        <option value="public">Public only</option>
+      </select>
+      <select id="sort" aria-label="Sort">
+        <option value="name">Sort: name</option>
+        <option value="pushed">Sort: recently updated</option>
+        <option value="people">Sort: most people</option>
+      </select>
+      <label><input type="checkbox" id="showArchived" checked> Archived</label>
+      <label><input type="checkbox" id="showForks" checked> Forks</label>
+    </div>
+    <div class="meta" id="meta"></div>
+
+    <div class="panel list" id="list"></div>
+
+    <details class="panel history" id="historyBox">
+      <summary>Sharing changes over time</summary>
+      <div id="history"></div>
+    </details>
+  </section>
+
+  <div id="loading" class="panel loading hidden">Checking GitHub…</div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { data: null, history: [], filter: 'all' };
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const safeUrl = (u) => /^https:\/\//.test(u || '') ? u : '#';
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const ago = (iso) => {
+    if (!iso) return 'never';
+    const s = (Date.now() - new Date(iso)) / 1000;
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+    return `${Math.floor(s / 86400)} days ago`;
+  };
+
+  async function api(path, body) {
+    const opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+    const res = await fetch(path, opts);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(json.error || `Error ${res.status}`), { status: res.status });
+    return json;
+  }
+
+  function show(screen) {
+    $('setup').classList.toggle('hidden', screen !== 'setup');
+    $('main').classList.toggle('hidden', screen !== 'main');
+  }
+  function busy(on) {
+    $('loading').classList.toggle('hidden', !on);
+    $('refreshBtn').disabled = on;
+  }
+
+  async function refresh() {
+    busy(true);
+    try {
+      const r = await api('/api/refresh', {});
+      state.data = r.data; state.history = r.history;
+      render();
+    } catch (e) {
+      if (e.status === 401) { show('setup'); $('setupMsg').className = 'msg err'; $('setupMsg').textContent = e.message; }
+      else alert(e.message);
+    } finally { busy(false); }
+  }
+
+  function person(p, invite) {
+    const img = p.avatar ? `<img src="${esc(safeUrl(p.avatar))}" alt="">` : '';
+    const role = invite ? 'invited' : p.role;
+    return `<a class="person${invite ? ' invite' : ''}" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener"
+      title="${esc(invite ? `Invite sent ${fmtDate(p.createdAt)} — not accepted yet` : `Access: ${p.role}`)}">${img}${esc(p.login)}
+      ${role ? `<span class="role">· ${esc(role)}</span>` : ''}</a>`;
+  }
+
+  const statusLabel = { shared: 'Shared', pending: 'Invite pending', none: 'Not shared' };
+
+  function render() {
+    const d = state.data;
+    if (!d) return;
+    show('main');
+
+    $('who').href = safeUrl(d.user.url);
+    $('who').innerHTML = `<img src="${esc(safeUrl(d.user.avatar))}" alt=""><span>${esc(d.user.login)}</span>`;
+
+    const repos = d.repos;
+    const count = (s) => repos.filter((r) => r.status === s).length;
+    $('tAll').textContent = repos.length;
+    $('tShared').textContent = count('shared');
+    $('tPending').textContent = count('pending');
+    $('tNone').textContent = count('none');
+    document.querySelectorAll('.tile').forEach((t) => t.classList.toggle('active', t.dataset.filter === state.filter));
+
+    const q = $('search').value.trim().toLowerCase();
+    const vis = $('visibility').value;
+    const showArchived = $('showArchived').checked;
+    const showForks = $('showForks').checked;
+    const sort = $('sort').value;
+
+    let rows = repos.filter((r) =>
+      (state.filter === 'all' || r.status === state.filter) &&
+      (vis === 'any' || (vis === 'private') === r.private) &&
+      (showArchived || !r.archived) &&
+      (showForks || !r.fork) &&
+      (!q || r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q) ||
+        [...r.collaborators, ...r.invites].some((p) => p.login.toLowerCase().includes(q))));
+
+    const peopleCount = (r) => r.collaborators.length + r.invites.length;
+    rows.sort(sort === 'pushed' ? (a, b) => (b.pushedAt || '').localeCompare(a.pushedAt || '')
+      : sort === 'people' ? (a, b) => peopleCount(b) - peopleCount(a) || a.name.localeCompare(b.name)
+      : (a, b) => a.name.localeCompare(b.name));
+
+    $('meta').textContent = `Showing ${rows.length} of ${repos.length} · Last checked ${ago(d.scannedAt)} (${fmtDate(d.scannedAt)})`;
+
+    $('list').innerHTML = rows.length ? rows.map((r) => `
+      <div class="row">
+        <div>
+          <a class="name" href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener">${esc(r.name)}</a>
+          ${r.description ? `<div class="desc">${esc(r.description)}</div>` : ''}
+          <div class="tags">
+            <span class="tag">${r.private ? 'Private' : 'Public, anyone can view'}</span>
+            ${r.fork ? '<span class="tag">Fork</span>' : ''}
+            ${r.archived ? '<span class="tag">Archived</span>' : ''}
+          </div>
+        </div>
+        <div>
+          <span class="status ${r.status}">${statusLabel[r.status]}</span>
+          ${peopleCount(r) ? `<div class="people">${r.collaborators.map((p) => person(p, false)).join('')}${r.invites.map((p) => person(p, true)).join('')}</div>`
+            : '<div class="desc">Only you have access</div>'}
+          ${r.error ? `<div class="err-line">Couldn't fully check: ${esc(r.error)}</div>` : ''}
+        </div>
+        <div><a class="btn" href="${esc(safeUrl(r.accessUrl))}" target="_blank" rel="noopener">Manage access</a></div>
+      </div>`).join('')
+      : '<div class="empty">No repositories match.</div>';
+
+    const h = state.history;
+    $('history').innerHTML = h.length
+      ? h.map((e) => `<div class="hist-item"><time>${esc(fmtDate(e.when))}</time><div><b>${esc(e.repo.split('/').pop())}</b>: ${esc(e.text)}</div></div>`).join('')
+      : '<div class="hist-item">No changes recorded yet. Each time you press Refresh, any new or removed sharing shows up here.</div>';
+  }
+
+  // events
+  document.querySelectorAll('.tile').forEach((t) => t.addEventListener('click', () => { state.filter = t.dataset.filter; render(); }));
+  ['search', 'visibility', 'sort', 'showArchived', 'showForks'].forEach((id) => $(id).addEventListener('input', render));
+  $('refreshBtn').addEventListener('click', refresh);
+
+  $('disconnectBtn').addEventListener('click', async () => {
+    if (!confirm('Disconnect GitHub? This deletes the saved token and tracked history from this computer. (To fully revoke it, also delete the token on GitHub.)')) return;
+    await api('/api/disconnect', {});
+    state.data = null; state.history = [];
+    $('setupMsg').textContent = '';
+    show('setup');
+  });
+
+  $('tokenForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const msg = $('setupMsg');
+    msg.className = 'msg'; msg.textContent = 'Checking token…';
+    $('tokenBtn').disabled = true;
+    try {
+      await api('/api/token', { token: $('tokenInput').value });
+      $('tokenInput').value = '';
+      msg.textContent = '';
+      await refresh();
+    } catch (e) {
+      msg.className = 'msg err'; msg.textContent = e.message;
+    } finally { $('tokenBtn').disabled = false; }
+  });
+
+  // start
+  (async () => {
+    try {
+      const r = await api('/api/data');
+      if (!r.hasToken) return show('setup');
+      $('disconnectBtn').classList.toggle('hidden', r.tokenFromEnv);
+      state.history = r.history;
+      if (r.data) { state.data = r.data; render(); }
+      await refresh(); // always fetch fresh data on open
+    } catch (e) { alert(e.message); }
+  })();
+})();
+</script>
+</body>
+</html>
